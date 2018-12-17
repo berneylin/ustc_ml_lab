@@ -61,10 +61,25 @@ def calc_gaussian_prob(x, mean, std):
     return (1 / (np.sqrt(2*np.pi) * std)) * exponent
 
 
-def calc_class_prob(summaries, input_vector):
+def calc_prior_by_class(training_set):
+    prior_dict = dict()
+    for i in range(training_set.shape[0]):
+        curr_class = training_set[i, -1]
+        if curr_class not in prior_dict:
+            prior_dict[curr_class] = 0
+        else:
+            prior_dict[curr_class] += 1
+
+    for k, v in prior_dict.items():
+        prior_dict[k] = v / training_set.shape[0]
+
+    return prior_dict
+
+
+def calc_class_prob(summaries, input_vector, prior_dict):
     prob_dict = {}
     for classification, class_summary in summaries.items():
-        prob_dict[classification] = 1
+        prob_dict[classification] = prior_dict[classification]
         for i in range(len(class_summary)):
             mean, std = class_summary[i]
             x = input_vector[i]
@@ -73,8 +88,8 @@ def calc_class_prob(summaries, input_vector):
     return prob_dict
 
 
-def predict(summaries, input_vector):
-    prob_dict = calc_class_prob(summaries, input_vector)
+def predict(summaries, input_vector, prior_dict):
+    prob_dict = calc_class_prob(summaries, input_vector, prior_dict)
     predict_label, predict_prob = None, -1
     for classification, probability in prob_dict.items():
         if predict_label is None or probability > predict_prob:
@@ -84,12 +99,12 @@ def predict(summaries, input_vector):
     return predict_label, predict_prob
 
 
-def calc_accuracy(testing_set, summaries, show=True):
+def calc_accuracy(testing_set, summaries, prior_dict, show=True):
     acc_cnt = 0
     for i in range(testing_set.shape[0]):
         curr_data = testing_set[i, :]
         true_label = curr_data[-1]
-        pred_label = predict(summaries, curr_data)[0]
+        pred_label = predict(summaries, curr_data, prior_dict)[0]
         if true_label == pred_label:
             acc_cnt += 1
         if show:
@@ -97,9 +112,8 @@ def calc_accuracy(testing_set, summaries, show=True):
     return acc_cnt/testing_set.shape[0]
 
 
-def sk_learn_predict_acc(data_set):
+def sk_learn_predict_acc(training_set, testing_set):
     from sklearn.naive_bayes import GaussianNB
-    training_set, testing_set = split_dataset(data_set, split_ratio=0.67)
     features = training_set[:, 0:-1]
     labels = training_set[:, -1]
     clf = GaussianNB()
@@ -115,6 +129,7 @@ def sk_learn_predict_acc(data_set):
 if __name__ == '__main__':
     data_set = load_dataset('pima-indians-diabetes.data.csv')
     training_set, testing_set = split_dataset(data_set, split_ratio=0.67)
+    prior_dict = calc_prior_by_class(training_set)
     summaries = summarize_by_class(training_set)
-    print("印第安数据集的预测准确率为: %.2f%%" % (calc_accuracy(testing_set, summaries, show=False) * 100))
-    print("印第安数据集使用sci-kit-learn中的贝叶斯预测准确率为：%.2f%%" % (sk_learn_predict_acc(data_set) * 100))
+    print("印第安数据集的预测准确率为: %.2f%%" % (calc_accuracy(testing_set, summaries, prior_dict, show=False) * 100))
+    print("印第安数据集使用sci-kit-learn中的贝叶斯预测准确率为：%.2f%%" % (sk_learn_predict_acc(training_set, testing_set) * 100))
